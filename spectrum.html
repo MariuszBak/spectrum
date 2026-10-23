@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0c111b"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="description" content="Widmo, wykrywanie pików tonalnych i miernik poziomu audio."><title>SPECTRUM — analizator audio</title><style>
+:root{color-scheme:dark;--bg:#0c111b;--panel:#141d2b;--line:#293548;--muted:#91a1b7;--text:#f3f6fc;--green:#b9f27a;--blue:#83d9ff;--alert:#ff939f;--app-height:100dvh;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--text)}body{position:fixed;inset:0}button,input,select{font:inherit}button{touch-action:manipulation;cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:3px}button:disabled{opacity:.55;cursor:wait}[hidden]{display:none!important}
+.app{width:100%;height:var(--app-height);max-height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));overflow:hidden}
+.toolbar{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;min-width:0}.brand{font-size:16px;letter-spacing:1.7px;font-weight:750;display:flex;align-items:center;gap:8px;min-width:0}.brand svg{width:23px;height:26px;stroke:var(--green);stroke-width:2;fill:none;stroke-linecap:round;flex-shrink:0}.function-tabs{grid-column:1/-1;grid-row:2;display:flex;background:#182233;border:1px solid var(--line);padding:3px;border-radius:12px;gap:4px;min-width:0}.function-tabs button{border:0;background:transparent;border-radius:8px;color:var(--muted);min-height:38px;padding:0 16px;flex:1;font-size:13px;font-weight:650}.function-tabs button[aria-selected=true]{background:var(--blue);color:#0b2230}#levelTab[aria-selected=true]{background:var(--green);color:#172b0e}
+.settings-button{height:44px;min-width:44px;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--blue)}.settings-button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}.settings-button span{display:none}.start-button{height:44px;min-width:88px;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 15px;border:0;border-radius:11px;background:var(--green);color:#14230c;font-size:14px;font-weight:700}.start-button.running{background:var(--alert);color:#350e16}#playIcon{font-size:12px;line-height:1}
+.workspace,.view,.spectrum-layout,.level-layout,.chart-box,.meter-body,.gauge{min-width:0;min-height:0}.workspace{overflow:hidden}.view{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}.view-heading{display:flex;align-items:center;gap:12px;min-height:20px}.view-heading h1{font-size:14px;letter-spacing:.2px;font-weight:550;margin:0}.technical{font:10px ui-monospace,monospace;color:var(--muted);margin-left:auto;white-space:nowrap}.unit-badge{font:10px ui-monospace,monospace;color:var(--green)}#peakStatus{font:9px ui-monospace,monospace;color:var(--muted);white-space:nowrap}#peakStatus.alert{color:var(--alert)}
+.spectrum-layout,.level-layout{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px}.chart-box{position:relative;border:1px solid var(--line);border-radius:14px;background:linear-gradient(155deg,#131e2b,#101823);overflow:hidden}canvas{display:block;width:100%;height:100%}.empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:15px;align-items:center;justify-content:center;pointer-events:none;color:var(--muted);font-size:12px}.empty svg{width:58px;height:38px;fill:none;stroke:#576c85;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.peak-cards,.readings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;min-width:0;min-height:0}.peak-card{--peak:#ffd18b;border:1px solid var(--line);border-top:3px solid var(--peak);border-radius:12px;padding:12px;min-width:0;min-height:0;background:var(--panel);overflow:hidden}.peak-card:nth-child(2){--peak:#83d9ff}.peak-card:nth-child(3){--peak:#eeb1f7}.peak-card-head{display:flex;gap:7px;align-items:center;color:var(--muted);font:9px ui-monospace,monospace;letter-spacing:.6px;white-space:nowrap}.peak-number{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:18px;height:18px;background:var(--peak);color:#101623;border-radius:50%;font:bold 10px ui-monospace,monospace}.peak-frequency{color:var(--peak);display:flex;align-items:baseline;gap:5px;margin-top:10px;min-width:0;white-space:nowrap}.peak-frequency strong{font-size:clamp(20px,5.8vw,40px);font-weight:550;font-variant-numeric:tabular-nums;letter-spacing:-.7px;line-height:1.15}.peak-frequency>span{font:10px ui-monospace,monospace}.peak-level{display:block;font:10px ui-monospace,monospace;color:var(--muted);margin-top:6px;white-space:nowrap}.peak-state{display:block;font:8px ui-monospace,monospace;color:var(--peak);margin-top:8px;min-height:10px;white-space:nowrap}.peak-card:not(.detected) .peak-frequency{opacity:.35}.peak-card.held .peak-frequency{opacity:.6}.peak-card.suspected{box-shadow:inset 0 0 0 1px var(--alert)}.peak-card.suspected .peak-state{color:var(--alert);font-weight:700}
+.meter-body{display:grid;grid-template-rows:minmax(0,1fr) auto;border:1px solid var(--line);border-radius:14px;background:radial-gradient(ellipse at 50% 30%,#203127,#121b23 75%);overflow:hidden;padding:10px 12px 14px}.main-value{text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px}.main-value strong{font-size:clamp(38px,11vmin,96px);font-weight:400;font-variant-numeric:tabular-nums;letter-spacing:-2px;line-height:1.05;color:var(--green)}.reading-label{font:9px ui-monospace,monospace;color:var(--muted);letter-spacing:.7px;white-space:nowrap}#levelUnit{font:11px ui-monospace,monospace;color:var(--muted)}.reading-card{display:flex;flex-direction:column;justify-content:center;gap:6px;padding:15px 10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;text-align:center;min-width:0;min-height:0;overflow:hidden}.reading-card strong{font-size:clamp(23px,6vw,42px);font-weight:450;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--blue);white-space:nowrap}.reading-card:nth-child(2) strong{color:#ffd18b}.reading-card:nth-child(3) strong{color:#eeb1f7}.reading-unit{font:9px ui-monospace,monospace;color:var(--muted);white-space:nowrap}
+.statusbar{display:flex;align-items:center;gap:10px;font:9px ui-monospace,monospace;color:var(--muted);min-height:14px;min-width:0}#status{display:flex;align-items:center;gap:6px;white-space:nowrap}#status:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}#status.live{color:var(--green)}#message{min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#message.error{color:var(--alert)}#sampleRate{white-space:nowrap;margin-left:auto}
+ dialog{width:min(440px,calc(100% - 24px));max-height:calc(var(--app-height) - 24px);margin:auto;padding:0;overflow:hidden;border:1px solid #3b4e67;border-radius:18px;background:var(--bg);color:var(--text);box-shadow:0 25px 100px #0008}dialog[open]{display:flex;flex-direction:column}dialog::backdrop{background:#030813b8;backdrop-filter:blur(8px)}.settings-header{display:flex;justify-content:space-between;align-items:center;padding:13px 17px;border-bottom:1px solid var(--line);flex-shrink:0}.settings-header h2{font-size:17px;font-weight:600;margin:0}.settings-header button{width:42px;height:42px;border:0;border-radius:10px;background:var(--panel);color:var(--text);font-size:18px}.settings-content{overflow-y:auto;overscroll-behavior:contain;min-height:0;padding:20px;display:flex;flex-direction:column;gap:18px}.settings-content label{display:flex;flex-direction:column;gap:9px;font-size:12px;color:var(--muted)}select,input[type=number]{width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;padding:12px;background:var(--panel);color:var(--text);font-size:16px;min-height:44px}.calibration{padding:14px;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line);border-radius:12px;background:#121c28}.settings-content p,.settings-note{font-size:11px;color:var(--muted);line-height:1.65;margin:0}.settings-note{padding-top:15px;border-top:1px solid var(--line)}.action{min-height:44px;padding:10px 12px;border:1px solid #41563a;border-radius:9px;background:#202e20;color:var(--green);font-size:12px}.settings-content .switch-label{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;color:var(--text)}input[type=checkbox]{appearance:none;flex-shrink:0;width:44px;height:26px;border:1px solid var(--line);border-radius:20px;background:#263245;position:relative;margin:0}input[type=checkbox]:before{content:"";position:absolute;left:4px;top:4px;width:16px;height:16px;background:#91a1b7;border-radius:50%;transition:transform .15s}input[type=checkbox]:checked{background:#334b27;border-color:#668b48}input[type=checkbox]:checked:before{background:var(--green);transform:translateX(18px)}
+@media(min-width:700px){.app{padding:18px;gap:14px}.toolbar{grid-template-columns:auto minmax(160px,300px) 1fr auto;gap:16px}.function-tabs{grid-column:2;grid-row:1}.settings-button{justify-self:end}.settings-button span{display:inline;font-size:12px}.peak-frequency strong{font-size:clamp(30px,4vw,60px)}.peak-card{padding:16px}.peak-state{font-size:10px}.peak-level{font-size:12px}.peak-card-head{font-size:10px}.reading-label{font-size:11px}.technical,#peakStatus{font-size:11px}}
+@media(orientation:landscape) and (min-width:540px){.app{padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));gap:8px}.toolbar{grid-template-columns:auto minmax(148px,230px) 1fr auto;gap:10px}.function-tabs{grid-column:2;grid-row:1}.settings-button{justify-self:end}.spectrum-layout,.level-layout{grid-template-rows:minmax(0,1fr);grid-template-columns:minmax(0,1fr) clamp(158px,24vw,290px);gap:10px}.peak-cards,.readings{grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(3,minmax(0,1fr));gap:8px}.peak-card{position:relative;padding:9px 10px;border-top-width:1px;border-left:3px solid var(--peak);display:flex;flex-direction:column;justify-content:center}.peak-card-head{position:absolute;left:10px;top:50%;transform:translateY(-50%)}.peak-card-head>span:last-child{display:none}.peak-frequency,.peak-level,.peak-state{margin-left:29px}.peak-frequency{margin-top:0;gap:5px}.peak-frequency strong{font-size:clamp(22px,4.7vh,42px)}.peak-level{font-size:10px;margin-top:3px}.peak-state{font-size:8px;margin-top:4px}.reading-card{padding:8px;gap:4px}.reading-card strong{font-size:clamp(23px,5.5vh,46px)}.reading-label{font-size:9px}.reading-unit{font-size:9px}.main-value strong{font-size:clamp(32px,10vh,72px)}.meter-body{padding:5px 12px 9px}.main-value{gap:1px}.main-value .reading-label{font-size:8px}.view{gap:7px}.technical,#peakStatus{font-size:9px}}
+@media(orientation:landscape) and (max-height:390px){.peak-level{display:none}.peak-state{margin-top:4px}.reading-card{gap:2px}.reading-unit{font-size:8px}.toolbar .settings-button span{display:none}.toolbar .settings-button{padding:0;width:44px}.function-tabs button{min-height:34px}.settings-button,.start-button{height:40px}.technical,#peakStatus{font-size:8px}.brand{font-size:14px;letter-spacing:1px}}
+@media(orientation:portrait) and (max-width:359px){.app{padding-left:10px;padding-right:10px;gap:9px}.brand{font-size:14px;letter-spacing:1px;gap:5px}.start-button{min-width:76px;padding:0 11px}.toolbar{gap:8px}.peak-card{padding:10px 7px}.peak-cards,.readings{gap:6px}.peak-frequency{gap:3px}.peak-frequency strong{font-size:20px}.peak-card-head{font-size:8px;gap:5px}.peak-state{font-size:7px}.reading-label{font-size:8px;letter-spacing:0}.technical{font-size:9px}.view-heading{gap:8px}}
+@media(orientation:portrait) and (max-height:600px){.app{gap:8px;padding-top:max(8px,env(safe-area-inset-top))}.toolbar{gap:7px}.function-tabs button{min-height:34px}.view{gap:6px}.peak-card{padding-top:8px;padding-bottom:8px}.peak-frequency{margin-top:5px}.peak-state{margin-top:5px}.peak-level{margin-top:4px}.reading-card{padding:10px 7px;gap:4px}.meter-body{padding-top:5px;padding-bottom:8px}.main-value strong{font-size:38px}}
+.chart-box,.gauge{position:relative}.chart-box canvas,.gauge canvas{position:absolute;inset:0}dialog[open]{position:fixed;inset:max(12px,env(safe-area-inset-top)) 0 auto;margin:0 auto;max-height:calc(var(--app-height) - max(12px,env(safe-area-inset-top)) - 12px)}
+@media(orientation:landscape) and (max-height:300px){.app{gap:6px}.peak-state,.reading-unit{display:none}.peak-card{padding:5px 10px}.peak-frequency strong{font-size:20px}.reading-card{padding:3px;gap:2px}.reading-card strong{font-size:20px}.reading-label{font-size:8px}.main-value strong{font-size:28px}.meter-body{padding:3px 8px 5px}.statusbar{font-size:8px;min-height:11px}}
+
+</style></head>
+<body><div class="app">
+<header class="toolbar">
+<div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6m4-10v14m5-17v20m5-17v14m4-10v6"/></svg><span>SPECTRUM</span></div>
+<div class="function-tabs" role="tablist" aria-label="Funkcja"><button id="spectrumTab" role="tab" aria-selected="true" aria-controls="spectrumView">Spectrum</button><button id="levelTab" role="tab" aria-selected="false" aria-controls="levelView" tabindex="-1">Poziom</button></div>
+<button id="settingsOpen" class="settings-button" aria-label="Ustawienia" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg><span>Ustawienia</span></button>
+<button id="start" class="start-button"><span id="playIcon" aria-hidden="true">▶</span><span id="startText">Start</span></button>
+</header>
+<main class="workspace">
+<section id="spectrumView" class="view" role="tabpanel" aria-labelledby="spectrumTab">
+<div class="view-heading"><h1>Widmo</h1><span id="peakStatus">3 PIKI</span><span class="technical">16K FFT · dBFS</span></div>
+<div class="spectrum-layout">
+<div class="chart-box"><canvas id="spectrum" aria-label="Widmo od 20 Hz do 20 kHz z trzema kolorowymi pikami"></canvas><div id="empty" class="empty"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M2 18h5l4-8 6 18L24 3l7 23 5-12 4 4h6"/></svg><span>Naciśnij Start</span></div></div>
+<div class="peak-cards" aria-label="Trzy dominujące częstotliwości">
+<article class="peak-card" id="peakCard0"><div class="peak-card-head"><span class="peak-number">1</span><span>PIK 1</span></div><div class="peak-frequency"><strong id="peakFrequency0">—</strong><span>Hz</span></div><span id="peakLevel0" class="peak-level">— dBFS</span><span id="peakState0" class="peak-state">—</span></article>
+<article class="peak-card" id="peakCard1"><div class="peak-card-head"><span class="peak-number">2</span><span>PIK 2</span></div><div class="peak-frequency"><strong id="peakFrequency1">—</strong><span>Hz</span></div><span id="peakLevel1" class="peak-level">— dBFS</span><span id="peakState1" class="peak-state">—</span></article>
+<article class="peak-card" id="peakCard2"><div class="peak-card-head"><span class="peak-number">3</span><span>PIK 3</span></div><div class="peak-frequency"><strong id="peakFrequency2">—</strong><span>Hz</span></div><span id="peakLevel2" class="peak-level">— dBFS</span><span id="peakState2" class="peak-state">—</span></article>
+</div></div></section>
+<section id="levelView" class="view" role="tabpanel" aria-labelledby="levelTab" hidden>
+<div class="view-heading"><h1>Poziom</h1><span id="unitBadge" class="unit-badge">dBFS</span><span id="meterTypeLabel" class="technical">WSKAZÓWKA</span></div>
+<div class="level-layout"><div class="meter-body"><div class="gauge"><canvas id="meter" aria-label="Wskaźnik poziomu RMS"></canvas></div><div class="main-value"><span class="reading-label">RMS</span><strong id="level">—</strong><span id="levelUnit">dBFS</span></div></div>
+<div class="readings"><article class="reading-card"><span class="reading-label">PEAK · CHWILOWY</span><strong id="peak">—</strong><span class="reading-unit">dBFS</span></article><article class="reading-card"><span class="reading-label">MAX PEAK</span><strong id="max">—</strong><span class="reading-unit">dBFS</span></article><article class="reading-card"><span class="reading-label">MAX RMS</span><strong id="maxRms">—</strong><span class="reading-unit">dBFS</span></article></div></div>
+</section></main>
+<div class="statusbar"><span id="status">GOTOWY</span><span id="message" role="status"></span><span id="sampleRate">MIKROFON</span></div>
+</div>
+<dialog id="settings" aria-labelledby="settingsTitle"><div class="settings-header"><h2 id="settingsTitle">Ustawienia</h2><button id="settingsClose" aria-label="Zamknij ustawienia">✕</button></div><div class="settings-content">
+<label>Jednostka poziomu<select id="units"><option value="dbfs">dBFS — sygnał cyfrowy</option><option value="spl">dB SPL — po kalibracji</option><option value="dbm">dBm — po kalibracji</option></select></label>
+<div id="splSettings" class="calibration" hidden><label>Korekta dB SPL (dB)<input id="offset" type="number" inputmode="decimal" min="0" max="160" step="0.1" value="100"></label><label>Poziom referencyjny (dB SPL)<input id="splReference" type="number" inputmode="decimal" min="0" max="160" step="0.1" value="94"></label><button id="calibrateSpl" class="action">Kalibruj do bieżącego RMS</button><p id="splCalibration" role="status">Ustaw stabilny dźwięk i wpisz odczyt miernika referencyjnego.</p></div>
+<div id="dbmSettings" class="calibration" hidden><label>Znany poziom odniesienia (dBm)<input id="dbmReference" type="number" inputmode="decimal" min="-200" max="100" step="0.1" value="0"></label><button id="calibrateDbm" class="action">Kalibruj do bieżącego RMS</button><p id="dbmCalibration" role="status">Brak kalibracji dBm.</p><p>dBm oznacza moc względem 1 mW. Wymaga znanego odniesienia i stałego toru wejściowego. Sam mikrofon nie mierzy mocy elektrycznej. PEAK i MAX to równoważne poziomy szczytowe.</p></div>
+<label>Wskaźnik poziomu<select id="meterType"><option value="analog">Wskazówka</option><option value="bar">Bargraf</option></select></label>
+<label>Wygładzanie widma<select id="smooth"><option value="0.65">Umiarkowane</option><option value="0">Brak</option><option value="0.85">Silne</option></select></label>
+<label class="switch-label"><span>Wykrywanie wzbudzeń</span><input id="feedbackEnabled" type="checkbox" checked role="switch"></label>
+<p>„Wzbudzenie?” wskazuje wąski, stabilny pik, który rośnie lub długo się utrzymuje. Jest to podejrzenie — instrumenty również mogą je wywołać.</p>
+<div class="settings-note">Piki: odczyt co 0,5 s · podtrzymanie 1,5 s.<br>Widmo zawsze w dBFS. dB SPL wymaga kalibracji.<br>Stop wyłącza mikrofon i zachowuje wskazania.</div>
+<button id="reset" class="action">Resetuj MAX PEAK i MAX RMS</button>
+</div></dialog>
+<script type="module">
+const toDb = power => 10 * Math.log10(Math.max(power, 1e-12));
+const distance = (a, b, binHz) => Math.abs(a - b) / Math.max(4 * binHz, Math.min(a, b) * (2 ** (1 / 12) - 1));
+const HOLD_MS = 1500;
+const ACQUIRE_MS = 450;
+const REPLACE_MS = 800;
+
+class PeakTracker {
+  constructor() { this.reset(); }
+
+  reset() {
+    this.power = null;
+    this.previousTime = null;
+    this.pending = [];
+    this.slots = [null, null, null];
+  }
+
+  resume(now) {
+    if (this.previousTime !== null) {
+      const gap = now - this.previousTime;
+      for (const track of [...this.slots, ...this.pending]) {
+        if (!track) continue;
+        track.lastSeen += gap;
+        if (track.since !== undefined) track.since += gap;
+        if (track.displayAt !== undefined) track.displayAt += gap;
+        if (track.replaceSince !== undefined) track.replaceSince += gap;
+        if (track.feedbackUntil) track.feedbackUntil += gap;
+        for (const sample of track.history || []) sample.time += gap;
+      }
+    }
+    this.previousTime = now;
+  }
+
+  update(data, binHz, now) {
+    const dt = this.previousTime === null ? 100 : Math.max(1, Math.min(250, now - this.previousTime));
+    this.previousTime = now;
+    const fresh = !this.power || this.power.length !== data.length;
+    if (fresh) this.power = new Float64Array(data.length);
+    const alpha = fresh ? 1 : 1 - Math.exp(-dt / 180);
+    for (let i = 0; i < data.length; i++) {
+      const power = Number.isFinite(data[i]) ? 10 ** (data[i] / 10) : 0;
+      this.power[i] += alpha * (power - this.power[i]);
+    }
+    const peaks = this.detect(data, binHz);
+    const used = new Set();
+
+    // Assign the nearest frequency first; a rank change never swaps colours.
+    const pairs = [];
+    this.slots.forEach((track, slot) => {
+      if (!track) return;
+      peaks.forEach((peak, index) => {
+        const delta = distance(track.frequency, peak.frequency, binHz);
+        if (delta < 1) pairs.push({ slot, index, delta });
+      });
+    });
+    pairs.sort((a, b) => a.delta - b.delta);
+    const matched = new Set();
+    for (const pair of pairs) {
+      if (matched.has(pair.slot) || used.has(pair.index)) continue;
+      const track = this.slots[pair.slot], peak = peaks[pair.index];
+      if (now - track.lastSeen > 250) track.history = [];
+      track.frequency += (peak.frequency - track.frequency) * (1 - Math.exp(-dt / 300));
+      track.level += (peak.level - track.level) * (1 - Math.exp(-dt / 300));
+      track.lastSeen = now;
+      track.held = false;
+      track.history.push({ ...peak, time: now });
+      matched.add(pair.slot);
+      used.add(pair.index);
+    }
+    this.slots.forEach((track, index) => {
+      if (!track) return;
+      if (now - track.lastSeen > HOLD_MS) this.slots[index] = null;
+      else {
+        track.held = !matched.has(index);
+        if (track.held) { track.feedback = false; track.feedbackUntil = 0; }
+      }
+    });
+
+    const previousPending = this.pending;
+    const consumed = new Set();
+    this.pending = [];
+    peaks.forEach((peak, index) => {
+      if (used.has(index) || this.slots.some(t => t && distance(t.frequency, peak.frequency, binHz) < 1)) return;
+      let best = -1, bestDistance = 1;
+      previousPending.forEach((old, i) => {
+        const d = distance(old.frequency, peak.frequency, binHz);
+        if (!consumed.has(i) && now - old.lastSeen <= 250 && d < bestDistance) { best = i; bestDistance = d; }
+      });
+      if (best >= 0) consumed.add(best);
+      const pending = { ...peak, since: best >= 0 ? previousPending[best].since : now, lastSeen: now };
+      this.pending.push(pending);
+    });
+
+    for (const candidate of this.pending) {
+      const age = now - candidate.since;
+      if (age < ACQUIRE_MS) continue;
+      if (this.slots.some(t => t && distance(t.frequency, candidate.frequency, binHz) < 1)) continue;
+      let slot = this.slots.findIndex(t => !t);
+      if (slot < 0) {
+        slot = this.slots.reduce((weakest, t, i, all) => t.level < all[weakest].level ? i : weakest, 0);
+        const weakest = this.slots[slot];
+        const enough = candidate.level > weakest.level + 4;
+        if (!enough) { candidate.replaceSince = undefined; continue; }
+        const old = previousPending.find(p => distance(p.frequency, candidate.frequency, binHz) < 1);
+        candidate.replaceSince = old?.replaceSince ?? now;
+        if (now - candidate.replaceSince < REPLACE_MS) continue;
+      }
+      this.slots[slot] = { frequency: candidate.frequency, level: candidate.level, lastSeen: now, held: false, displayAt: -Infinity, history: [{ ...candidate, time: now }], feedback: false };
+    }
+
+    for (const track of this.slots) {
+      if (track && !track.held) this.assessFeedback(track, now, binHz);
+      if (!track || now - track.displayAt < 500) continue;
+      const step = track.frequency >= 10000 ? 10 : track.frequency >= 1000 ? 5 : 1;
+      const rounded = Math.round(track.frequency / step) * step;
+      if (!track.displayFrequency || Math.abs(rounded - track.displayFrequency) >= Math.max(step, binHz * .6, track.frequency * .002)) track.displayFrequency = rounded;
+      track.displayLevel = Math.round(track.level);
+      track.displayAt = now;
+    }
+    return this.slots;
+  }
+
+  assessFeedback(track, now, binHz) {
+    track.history = track.history.filter(p => now - p.time <= 3000);
+    const history = track.history;
+    const age = history.length ? now - history[0].time : 0;
+    if (age < 900) { track.feedback = false; return; }
+    const recent = history.filter(p => now - p.time <= 1600);
+    const frequencies = recent.map(p => p.frequency);
+    const stable = Math.max(...frequencies) - Math.min(...frequencies) <= Math.max(2 * binHz, track.frequency * .008);
+    const narrow = recent.every(p => p.widthHz <= Math.max(6 * binHz, p.frequency * .025));
+    const clear = recent.every(p => p.prominence >= 12);
+    const level = recent[recent.length - 1].level;
+    const growth = level - recent[0].level;
+    const sustained = age >= 2500 && recent.every(p => p.prominence >= 16);
+    if (stable && narrow && clear && level >= -70 && (growth >= 4 || sustained)) track.feedbackUntil = now + 1200;
+    track.feedback = now < (track.feedbackUntil || 0);
+  }
+
+  detect(raw, binHz) {
+    const first = Math.max(1, Math.ceil(20 / binHz));
+    const last = Math.min(this.power.length - 2, Math.floor(20000 / binHz));
+    let strongest = -120;
+    for (let i = first; i <= last; i++) strongest = Math.max(strongest, toDb(this.power[i]));
+    const candidates = [];
+    for (let i = first; i <= last; i++) {
+      const p = this.power[i];
+      if (!(p > this.power[i - 1] && p >= this.power[i + 1])) continue;
+      const level = toDb(p);
+      if (level < -85 || level < strongest - 30 || !Number.isFinite(raw[i]) || raw[i] < level - 9) continue;
+      const radius = Math.max(8, Math.round(i * .15));
+      const background = [];
+      const stride = Math.max(1, Math.ceil(2 * radius / 32));
+      for (let j = Math.max(first, i - radius); j <= Math.min(last, i + radius); j += stride) {
+        if (Math.abs(j - i) > 2) background.push(this.power[j]);
+      }
+      background.sort((a, b) => a - b);
+      const prominence = background.length ? level - toDb(background[Math.floor(background.length / 2)]) : 0;
+      if (prominence < 6) continue;
+      let lower = i, upper = i;
+      while (lower > first && this.power[lower - 1] >= p / 4) lower--;
+      while (upper < last && this.power[upper + 1] >= p / 4) upper++;
+      const widthHz = (upper - lower + 1) * binHz;
+      const a = toDb(this.power[i - 1]), b = level, c = toDb(this.power[i + 1]);
+      const denominator = a - 2 * b + c;
+      const delta = denominator ? Math.max(-.5, Math.min(.5, .5 * (a - c) / denominator)) : 0;
+      candidates.push({ frequency: (i + delta) * binHz, level, prominence, widthHz });
+    }
+    candidates.sort((a, b) => b.level - a.level);
+    const distinct = [];
+    for (const peak of candidates) {
+      if (distinct.every(p => distance(p.frequency, peak.frequency, binHz) >= 1)) distinct.push(peak);
+      if (distinct.length === 24) break;
+    }
+    return distinct;
+  }
+}
+
+
+
+const $ = id => document.getElementById(id);
+const FFT_SIZE = 16384;
+const peakTracker = new PeakTracker();
+const peakColors = ['#ffd18b', '#83d9ff', '#eeb1f7'];
+const numberFormat = new Intl.NumberFormat('pl-PL');
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const db = x => x > 0 ? 20 * Math.log10(x) : -Infinity;
+let ctx, stream, analyser, processor, frequencyData;
+let sampleRate = 48000, state = 'idle', busy = false, sessionId = 0;
+let raf = 0, lastFrame = -Infinity, lastPeakUpdate = -Infinity;
+let rmsDb = -Infinity, peakDb = -Infinity, maxDb = -Infinity, maxRmsDb = -Infinity, needle = -90;
+let mode = 'analog', view = 'spectrum', unit = 'dbfs', offset = 100, dbmOffset = null, feedbackEnabled = true;
+try {
+  const saved = JSON.parse(localStorage.getItem('spectrum-settings') || '{}');
+  mode = saved.mode === 'bar' ? 'bar' : 'analog';
+  view = saved.view === 'level' ? 'level' : 'spectrum';
+  unit = ['dbfs', 'spl', 'dbm'].includes(saved.unit) ? saved.unit : saved.calibrated ? 'spl' : 'dbfs';
+  offset = Number.isFinite(saved.offset) ? saved.offset : 100;
+  dbmOffset = Number.isFinite(saved.dbmOffset) ? saved.dbmOffset : null;
+  feedbackEnabled = saved.feedbackEnabled !== false;
+  $('smooth').value = ['0', '0.65', '0.85'].includes(String(saved.smooth)) ? String(saved.smooth) : '0.65';
+} catch {}
+$('units').value = unit;
+$('offset').value = offset;
+$('meterType').value = mode;
+$('feedbackEnabled').checked = feedbackEnabled;
+
+const correction = () => unit === 'spl' ? offset : unit === 'dbm' ? dbmOffset : 0;
+const shown = x => Number.isFinite(x) && correction() !== null ? (x + correction()).toFixed(1) : '—';
+const tick = x => correction() === null ? '—' : String(Math.round((x + correction()) * 10) / 10);
+const unitName = () => unit === 'spl' ? 'dB SPL · est.' : unit === 'dbm' ? (dbmOffset === null ? 'dBm · skalibruj' : 'dBm · kal.') : 'dBFS';
+function save() {
+  try { localStorage.setItem('spectrum-settings', JSON.stringify({ mode, view, unit, offset, dbmOffset, feedbackEnabled, smooth: Number($('smooth').value) })); } catch {}
+}
+function readings() {
+  $('level').textContent = shown(rmsDb);
+  $('peak').textContent = shown(peakDb);
+  $('max').textContent = shown(maxDb);
+  $('maxRms').textContent = shown(maxRmsDb);
+  $('levelUnit').textContent = $('unitBadge').textContent = unitName();
+  document.querySelectorAll('.reading-unit').forEach(el => el.textContent = unitName());
+}
+function unitUI() {
+  $('splSettings').hidden = unit !== 'spl';
+  $('dbmSettings').hidden = unit !== 'dbm';
+  $('dbmCalibration').textContent = dbmOffset === null ? 'Brak kalibracji dBm.' : `Kalibracja zapisana · korekta ${dbmOffset.toFixed(1)} dB`;
+  $('meterTypeLabel').textContent = mode === 'analog' ? 'WSKAZÓWKA' : 'BARGRAF';
+}
+function message(text = '', error = false) {
+  $('message').textContent = $('message').title = text;
+  $('message').classList.toggle('error', error);
+}
+function stateUI() {
+  const active = state === 'running';
+  $('status').textContent = active ? 'NA ŻYWO' : state === 'starting' ? 'ŁĄCZENIE' : state === 'stopped' ? 'STOP' : 'GOTOWY';
+  $('status').classList.toggle('live', active);
+  $('start').classList.toggle('running', active);
+  $('start').disabled = busy;
+  $('startText').textContent = state === 'starting' ? '…' : active ? 'Stop' : 'Start';
+  $('playIcon').textContent = active ? '■' : '▶';
+  $('start').setAttribute('aria-label', active ? 'Zatrzymaj pomiar i wyłącz mikrofon' : 'Uruchom mikrofon i pomiar');
+  $('empty').hidden = !!frequencyData;
+  renderPeaks();
+}
+function setView(next) {
+  view = next;
+  for (const name of ['spectrum', 'level']) {
+    $(name + 'View').hidden = name !== view;
+    $(name + 'Tab').setAttribute('aria-selected', String(name === view));
+    $(name + 'Tab').tabIndex = name === view ? 0 : -1;
+  }
+  save();
+  draw();
+}
+function surface(id) {
+  const canvas = $(id), rect = canvas.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return null;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const width = Math.round(rect.width * dpr), height = Math.round(rect.height * dpr);
+  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+  const c = canvas.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, rect.width, rect.height);
+  return [c, rect.width, rect.height];
+}
+function drawMeter() {
+  const s = surface('meter'); if (!s) return;
+  const [c, w, h] = s, value = clamp(needle, -90, 0);
+  c.font = '10px ui-monospace, monospace'; c.textAlign = 'center';
+  if (mode === 'analog') {
+    const cx = w / 2, cy = h - 12, r = Math.min(w * .44, h * .92);
+    if (r < 22) return;
+    const start = -Math.PI * .88, end = -Math.PI * .12;
+    const angle = v => start + (v + 90) / 90 * (end - start);
+    c.lineWidth = 9; c.strokeStyle = '#2d3c37'; c.beginPath(); c.arc(cx, cy, r, start, end); c.stroke();
+    c.lineWidth = 4; c.strokeStyle = '#b9f27a'; c.beginPath(); c.arc(cx, cy, r, start, angle(value)); c.stroke();
+    const labelStep = r < 95 ? 30 : 15;
+    for (let v = -90; v <= 0; v += 5) {
+      const a = angle(v), major = v % labelStep === 0;
+      c.strokeStyle = v >= -10 ? '#ffd18b' : '#8caa91'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(cx + Math.cos(a) * (r - 9), cy + Math.sin(a) * (r - 9));
+      c.lineTo(cx + Math.cos(a) * (r - (major ? 19 : 13)), cy + Math.sin(a) * (r - (major ? 19 : 13))); c.stroke();
+      if (major && r > 60) { c.fillStyle = '#a1b6a9'; c.fillText(tick(v), cx + Math.cos(a) * (r - 32), cy + Math.sin(a) * (r - 32) + 3); }
+    }
+    const a = angle(value);
+    c.strokeStyle = '#e5f5d0'; c.lineWidth = 2; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * (r - 22), cy + Math.sin(a) * (r - 22)); c.stroke();
+    c.fillStyle = '#b9f27a'; c.beginPath(); c.arc(cx, cy, 5, 0, 2 * Math.PI); c.fill();
+  } else {
+    const x = 22, bw = w - 44, bh = Math.max(12, Math.min(70, h * .4)), y = Math.max(5, (h - bh - 25) / 2), n = 45;
+    for (let i = 0; i < n; i++) { c.fillStyle = i / n < (value + 90) / 90 ? (i > 40 ? '#ff939f' : i > 34 ? '#ffd18b' : '#b9f27a') : '#2a3742'; c.fillRect(x + i * bw / n, y, bw / n - 3, bh); }
+    for (let v = -90; v <= 0; v += 15) { c.fillStyle = '#91a1b7'; c.fillText(tick(v), x + (v + 90) / 90 * bw, y + bh + 20); }
+    if (Number.isFinite(maxDb)) { const xx = x + clamp((maxDb + 90) / 90, 0, 1) * bw; c.fillStyle = '#fff'; c.fillRect(xx - 1, y - 4, 2, bh + 8); }
+  }
+}
+function renderPeaks() {
+  const tracks = peakTracker.slots, live = tracks.filter(t => t && !t.held);
+  const strongest = live.reduce((best, t) => !best || t.level > best.level ? t : best, null);
+  let suspects = 0;
+  tracks.forEach((track, i) => {
+    const suspected = !!track && feedbackEnabled && track.feedback && !track.held;
+    if (suspected) suspects++;
+    $('peakFrequency' + i).textContent = track ? numberFormat.format(track.displayFrequency) : '—';
+    $('peakLevel' + i).textContent = track ? `${track.displayLevel} dBFS` : '— dBFS';
+    $('peakState' + i).textContent = !track ? '—' : state !== 'running' ? 'ZATRZYMANO' : track.held ? 'PODTRZYMANIE' : suspected ? 'WZBUDZENIE?' : track === strongest ? 'NAJSILNIEJSZY' : 'STABILNY';
+    $('peakCard' + i).classList.toggle('held', !!track?.held);
+    $('peakCard' + i).classList.toggle('detected', !!track);
+    $('peakCard' + i).classList.toggle('suspected', suspected && state === 'running');
+  });
+  $('peakStatus').textContent = state === 'stopped' ? 'ZATRZYMANE' : suspects && state === 'running' ? `WZBUDZENIE? ${suspects}` : state === 'running' && !live.length ? 'SZUKAM PIKÓW' : '3 PIKI';
+  $('peakStatus').classList.toggle('alert', suspects > 0 && state === 'running');
+}
+function drawPeakMarkers(c, x, y, top, bottom, left, right) {
+  peakTracker.slots.forEach((track, i) => {
+    if (!track) return;
+    const xx = x(track.displayFrequency); if (xx < left || xx > right) return;
+    let level = track.markerLevel ?? track.displayLevel;
+    if (!track.held && frequencyData) {
+      const bin = Math.round(track.displayFrequency / (sampleRate / FFT_SIZE)); level = -100;
+      for (let k = Math.max(1, bin - 2); k <= Math.min(frequencyData.length - 1, bin + 2); k++) level = Math.max(level, frequencyData[k]);
+      track.markerLevel = level;
+    }
+    const yy = y(level), suspected = feedbackEnabled && track.feedback && !track.held;
+    c.save(); c.globalAlpha = track.held ? .45 : 1;
+    c.strokeStyle = c.fillStyle = peakColors[i]; c.lineWidth = 1; c.setLineDash([3, 4]);
+    c.beginPath(); c.moveTo(xx, top); c.lineTo(xx, bottom); c.stroke(); c.setLineDash([]);
+    if (suspected) { c.strokeStyle = '#ff939f'; c.lineWidth = 2; c.beginPath(); c.arc(xx, yy, 10, 0, 2 * Math.PI); c.stroke(); }
+    c.beginPath(); c.arc(xx, yy, 5, 0, 2 * Math.PI); c.fill(); c.strokeStyle = '#0c111b'; c.lineWidth = 2; c.stroke();
+    const bx = clamp(xx, left + 10, right - 10), by = top + 11 + i * 22;
+    c.fillStyle = peakColors[i]; c.beginPath(); c.arc(bx, by, 9, 0, 2 * Math.PI); c.fill();
+    c.fillStyle = '#101623'; c.font = 'bold 11px ui-monospace, monospace'; c.textAlign = 'center'; c.fillText(String(i + 1), bx, by + 4); c.restore();
+  });
+}
+function drawSpectrum() {
+  const s = surface('spectrum'); if (!s) return;
+  const [c, w, h] = s, left = 34, right = w - 12, top = 14, bottom = h - 27;
+  if (right <= left || bottom <= top) return;
+  const xmax = Math.min(20000, sampleRate / 2);
+  const x = f => left + Math.log(f / 20) / Math.log(xmax / 20) * (right - left);
+  const y = d => top - clamp(d, -100, 0) / 100 * (bottom - top);
+  c.font = '10px ui-monospace, monospace'; c.lineWidth = 1;
+  for (let d = 0; d >= -100; d -= h < 160 ? 40 : 20) {
+    c.strokeStyle = '#263449'; c.beginPath(); c.moveTo(left, y(d)); c.lineTo(right, y(d)); c.stroke();
+    c.fillStyle = '#8498b2'; c.textAlign = 'right'; c.fillText(d, left - 7, y(d) + 3);
+  }
+  const ticks = w < 360 ? [20, 100, 1000, 5000, 20000] : w < 420 ? [20, 100, 1000, 10000, 20000] : [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+  for (const f of ticks) {
+    if (f > xmax) continue;
+    const xx = x(f); c.strokeStyle = '#202d40'; c.beginPath(); c.moveTo(xx, top); c.lineTo(xx, bottom); c.stroke();
+    c.textAlign = f === 20 ? 'left' : f === 20000 ? 'right' : 'center'; c.fillStyle = '#91a1b7'; c.fillText(f >= 1000 ? f / 1000 + 'k' : String(f), xx, h - 9);
+  }
+  if (!frequencyData) return;
+  const binHz = sampleRate / FFT_SIZE, bins = frequencyData.length, cols = Math.floor(right - left), points = [];
+  for (let i = 0; i < cols; i++) {
+    const low = 20 * (xmax / 20) ** (i / cols), high = 20 * (xmax / 20) ** ((i + 1) / cols);
+    const a = clamp(Math.floor(low / binHz), 1, bins - 1), b = clamp(Math.ceil(high / binHz), a + 1, bins);
+    let value = -100; for (let k = a; k < b; k++) value = Math.max(value, frequencyData[k]);
+    points.push([left + i, y(value)]);
+  }
+  const fill = c.createLinearGradient(0, top, 0, bottom); fill.addColorStop(0, '#83d9ff45'); fill.addColorStop(1, '#83d9ff02');
+  c.beginPath(); c.moveTo(left, bottom); for (const p of points) c.lineTo(...p); c.lineTo(right, bottom); c.closePath(); c.fillStyle = fill; c.fill();
+  c.beginPath(); points.forEach((p, i) => i ? c.lineTo(...p) : c.moveTo(...p)); c.strokeStyle = '#99d8ed'; c.lineWidth = 1.5; c.stroke();
+  drawPeakMarkers(c, x, y, top, bottom, left, right);
+}
+function draw() { if (view === 'level') drawMeter(); else drawSpectrum(); }
+function loop(t) {
+  if (state !== 'running') return;
+  if (t - lastFrame >= 33) {
+    lastFrame = t; analyser.getFloatFrequencyData(frequencyData);
+    if (t - lastPeakUpdate >= 100) { peakTracker.update(frequencyData, sampleRate / FFT_SIZE, t); renderPeaks(); lastPeakUpdate = t; }
+    needle += (Math.max(-90, rmsDb) - needle) * .24;
+    draw();
+  }
+  raf = requestAnimationFrame(loop);
+}
+function releaseAudio() {
+  if (stream) stream.getTracks().forEach(track => { track.onended = null; track.stop(); });
+  if (processor) { processor.port.onmessage = null; processor.disconnect(); }
+  if (ctx) { ctx.onstatechange = null; void ctx.close().catch(() => {}); }
+  stream = null; ctx = null; analyser = null; processor = null;
+}
+function stopCapture(text = '') {
+  sessionId++; cancelAnimationFrame(raf); state = 'stopped'; releaseAudio();
+  stateUI(); message(text); draw();
+}
+async function start() {
+  if (busy) return;
+  if (state === 'running') { stopCapture(); return; }
+  busy = true; state = 'starting'; message(); stateUI();
+  const request = ++sessionId;
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('unsupported');
+    const localContext = new (window.AudioContext || window.webkitAudioContext)(); ctx = localContext;
+    await localContext.resume();
+    const acquired = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }, video: false });
+    if (request !== sessionId || document.hidden) { acquired.getTracks().forEach(t => t.stop()); if (localContext.state !== 'closed') await localContext.close(); return; }
+    stream = acquired;
+    const processorUrl = URL.createObjectURL(new Blob(["class MeterProcessor extends AudioWorkletProcessor {\n  constructor(){super();this.sum=0;this.peak=0;this.count=0;}\n  process(inputs){const data=inputs[0]?.[0];if(data){for(const x of data){this.sum+=x*x;this.peak=Math.max(this.peak,Math.abs(x));}this.count+=data.length;if(this.count>=sampleRate/8){this.port.postMessage({rms:Math.sqrt(this.sum/this.count),peak:this.peak});this.sum=0;this.peak=0;this.count=0;}}return true;}\n}\nregisterProcessor('meter-processor',MeterProcessor);\n"], { type: 'text/javascript' }));
+    try { await localContext.audioWorklet.addModule(processorUrl); } finally { URL.revokeObjectURL(processorUrl); }
+    if (request !== sessionId || document.hidden) { releaseAudio(); return; }
+    await localContext.resume();
+    if (localContext.state !== 'running') throw new Error('resume');
+    sampleRate = localContext.sampleRate;
+    analyser = localContext.createAnalyser(); analyser.fftSize = FFT_SIZE;
+    analyser.smoothingTimeConstant = Number($('smooth').value); analyser.minDecibels = -100; analyser.maxDecibels = 0;
+    frequencyData = new Float32Array(analyser.frequencyBinCount).fill(-100);
+    peakTracker.reset(); rmsDb = peakDb = -Infinity; needle = -90;
+    processor = new AudioWorkletNode(localContext, 'meter-processor');
+    processor.port.onmessage = ({ data }) => {
+      if (state !== 'running') return;
+      rmsDb = db(data.rms); peakDb = db(data.peak); maxDb = Math.max(maxDb, peakDb); maxRmsDb = Math.max(maxRmsDb, rmsDb); readings();
+    };
+    const source = localContext.createMediaStreamSource(stream), silent = localContext.createGain(); silent.gain.value = 0;
+    source.connect(analyser); source.connect(processor); processor.connect(silent).connect(localContext.destination);
+    stream.getAudioTracks()[0].onended = () => stopCapture('Mikrofon został odłączony.');
+    state = 'running'; lastFrame = lastPeakUpdate = -Infinity;
+    localContext.onstatechange = () => { if (state === 'running' && localContext.state !== 'running') stopCapture('Audio przerwane. Naciśnij Start.'); };
+    $('sampleRate').textContent = `${sampleRate / 1000} kHz · MONO`;
+    readings(); raf = requestAnimationFrame(loop);
+  } catch (e) {
+    if (request === sessionId) {
+      releaseAudio(); state = frequencyData ? 'stopped' : 'idle';
+      const text = e.name === 'NotAllowedError' ? 'Zezwól na mikrofon w Safari.' : e.name === 'NotFoundError' ? 'Nie znaleziono mikrofonu.' : e.message === 'unsupported' ? 'Otwórz aplikację przez HTTPS w Safari.' : 'Audio niedostępne. Spróbuj ponownie.';
+      message(text, true);
+    }
+  } finally { busy = false; if (state === 'starting') state = 'stopped'; stateUI(); draw(); }
+}
+function calibrate(kind) {
+  const target = $(kind + 'Calibration'), raw = $(kind + 'Reference').value.trim(), reference = Number(raw);
+  if (!raw || !Number.isFinite(reference) || reference < (kind === 'dbm' ? -200 : 0) || reference > (kind === 'dbm' ? 100 : 160)) { target.textContent = 'Podaj poprawny poziom odniesienia.'; return; }
+  if (state !== 'running' || !Number.isFinite(rmsDb) || rmsDb < -90) { target.textContent = 'Uruchom pomiar i podaj stabilny sygnał odniesienia.'; return; }
+  const value = reference - rmsDb;
+  if (kind === 'dbm') dbmOffset = value;
+  else { if (value < 0 || value > 160) { target.textContent = 'Korekta musi mieścić się w zakresie 0–160 dB.'; return; } offset = value; $('offset').value = offset.toFixed(1); }
+  save(); unitUI(); target.textContent = `Kalibracja zapisana · korekta ${value.toFixed(1)} dB`; readings(); draw();
+}
+$('start').addEventListener('click', start);
+$('spectrumTab').onclick = () => setView('spectrum');
+$('levelTab').onclick = () => setView('level');
+for (const name of ['spectrum', 'level']) $(name + 'Tab').onkeydown = e => {
+  if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const next = e.key === 'Home' ? 'spectrum' : e.key === 'End' ? 'level' : view === 'spectrum' ? 'level' : 'spectrum'; setView(next); $(next + 'Tab').focus(); }
+};
+$('settingsOpen').onclick = () => $('settings').showModal();
+$('settingsClose').onclick = () => $('settings').close();
+$('settings').addEventListener('click', e => { if (e.target === $('settings')) { const r = $('settings').getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('settings').close(); } });
+$('units').onchange = () => { unit = $('units').value; save(); unitUI(); readings(); draw(); };
+$('offset').onchange = () => { offset = clamp(Number($('offset').value) || 0, 0, 160); $('offset').value = offset; save(); readings(); draw(); };
+$('meterType').onchange = () => { mode = $('meterType').value; save(); unitUI(); draw(); };
+$('smooth').onchange = () => { if (analyser) analyser.smoothingTimeConstant = Number($('smooth').value); save(); };
+$('feedbackEnabled').onchange = () => { feedbackEnabled = $('feedbackEnabled').checked; save(); renderPeaks(); draw(); };
+$('calibrateDbm').onclick = () => calibrate('dbm');
+$('calibrateSpl').onclick = () => calibrate('spl');
+$('reset').onclick = () => { maxDb = maxRmsDb = -Infinity; readings(); draw(); message('MAX wyzerowane'); };
+document.addEventListener('visibilitychange', () => { if (document.hidden && (state === 'running' || state === 'starting')) stopCapture(); });
+window.addEventListener('pagehide', () => { if (state === 'running' || state === 'starting') stopCapture(); });
+function fitViewport() {
+  const height = window.visualViewport?.height || window.innerHeight;
+  if (height) document.documentElement.style.setProperty('--app-height', `${Math.floor(height)}px`);
+  draw();
+}
+window.addEventListener('resize', fitViewport);
+window.visualViewport?.addEventListener('resize', fitViewport);
+if (typeof ResizeObserver !== 'undefined') { const observer = new ResizeObserver(() => requestAnimationFrame(draw)); observer.observe($('spectrum')); observer.observe($('meter')); }
+unitUI(); readings(); stateUI(); setView(view); fitViewport();
+
+</script></body></html>
