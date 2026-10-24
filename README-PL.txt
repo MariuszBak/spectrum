@@ -1,4 +1,4 @@
-KOMPILACJA 26.10.3
+KOMPILACJA 26.10.4
 
 SPECTRUM — PWA
 
@@ -33,6 +33,8 @@ Ustawienia: wskazówka/bargraf, dBFS/dB SPL/dBm, kalibracja.
 Analizator: dolny poziom skali od -120 do -40 dBFS, zakres od–do w Hz.
 Zakres częstotliwości dotyczy wykresu, Waterfall i wykrywania pików.
 Zmiana pasma czyści historię Waterfall; zmiana poziomu zmienia kolory historii.
+Dotknij i przytrzymaj widmo lub Waterfall, aby odczytać częstotliwość.
+Przesuwaj palec, aby zmieniać punkt; puść, aby ukryć odczyt.
 Stop wyłącza mikrofon i zachowuje odczyty. Dźwięk jest analizowany lokalnie.
 „Wzbudzenie?” to heurystyka; instrumenty i inne stabilne tony mogą ją uruchomić.
 dB SPL wymaga kalibracji. dBm wymaga znanego elektrycznego poziomu odniesienia.
