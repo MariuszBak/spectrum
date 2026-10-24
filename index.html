@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl" data-version="26.10.3"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0c111b"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="SPECTRUM"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><meta name="author" content="Mariusz Bak — dev@mariuszbak.eu"><meta name="description" content="Widmo, wykrywanie pików tonalnych i miernik poziomu audio."><title>SPECTRUM — analizator audio</title><link rel="stylesheet" href="style.css?v=26.10.3"><meta name="application-version" content="26.10.3"></head>
+<html lang="pl" data-version="26.10.4"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0c111b"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="SPECTRUM"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><meta name="author" content="Mariusz Bak — dev@mariuszbak.eu"><meta name="description" content="Widmo, wykrywanie pików tonalnych i miernik poziomu audio."><title>SPECTRUM — analizator audio</title><link rel="stylesheet" href="style.css?v=26.10.4"><meta name="application-version" content="26.10.4"></head>
 <body><div class="app">
 <header class="toolbar">
 <div class="brand"><img src="icons/icon-192.png" width="28" height="28" alt=""><span>SPECTRUM</span></div>
@@ -7,7 +7,7 @@
 <button id="settingsOpen" class="settings-button" aria-label="Ustawienia" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg><span>Ustawienia</span></button>
 <button id="start" class="start-button"><span id="playIcon" aria-hidden="true">▶</span><span id="startText">Start</span></button>
 </header>
-<main class="workspace">
+<main id="workspace" class="workspace">
 <section id="spectrumView" class="view" role="tabpanel" aria-labelledby="spectrumTab">
 <div class="view-heading"><h1 id="spectrumTitle">Widmo</h1><span id="peakStatus">3 PIKI</span><span class="technical">16K FFT · dBFS</span></div>
 <div class="spectrum-layout">
@@ -21,7 +21,7 @@
 <div class="view-heading"><h1>Poziom</h1><span id="unitBadge" class="unit-badge">dBFS</span><span id="meterTypeLabel" class="technical">WSKAZÓWKA</span></div>
 <div class="level-layout"><div class="meter-body"><div class="gauge"><canvas id="meter" aria-label="Wskaźnik poziomu RMS"></canvas></div><div class="main-value"><span class="reading-label">RMS</span><strong id="level">—</strong><span id="levelUnit">dBFS</span></div></div>
 <div class="readings"><article class="reading-card"><span class="reading-label">PEAK · CHWILOWY</span><strong id="peak">—</strong><span class="reading-unit">dBFS</span></article><article class="reading-card"><span class="reading-label">MAX PEAK</span><strong id="max">—</strong><span class="reading-unit">dBFS</span></article><article class="reading-card"><span class="reading-label">MAX RMS</span><strong id="maxRms">—</strong><span class="reading-unit">dBFS</span></article></div></div>
-</section></main>
+</section><div id="frequencyProbe" class="frequency-probe" hidden><strong id="probeFrequency">—</strong><span>Hz</span></div></main>
 <div class="statusbar"><span id="status">GOTOWY</span><span id="message" role="status"></span><span id="sampleRate">MIKROFON</span></div>
 </div>
 <dialog id="settings" aria-labelledby="settingsTitle"><div class="settings-header"><h2 id="settingsTitle">Ustawienia</h2><button id="settingsClose" aria-label="Zamknij ustawienia">✕</button></div><div class="settings-content">
@@ -35,6 +35,6 @@
 <p>„Wzbudzenie?” wskazuje wąski, stabilny pik, który rośnie lub długo się utrzymuje. Jest to podejrzenie — instrumenty również mogą je wywołać.</p>
 <div class="settings-note">Waterfall: nowe dane u góry, bez wykrywania pików.<br>Piki: odczyt co 0,5 s · podtrzymanie 1,5 s.<br>Widmo zawsze w dBFS. dB SPL wymaga kalibracji.<br>Stop wyłącza mikrofon i zachowuje wskazania.</div>
 <div id="installSection" class="pwa-install"><h3>Instalacja aplikacji</h3><button id="installPwa" class="action" hidden>Zainstaluj SPECTRUM</button><p id="installHint"></p></div><p id="offlineStatus" role="status">Przygotowywanie trybu offline…</p>
-<button id="reset" class="action">Resetuj MAX PEAK i MAX RMS</button><div class="release-info">Wersja <span id="buildVersion">26.10.3</span></div><div class="author-info"><span>Autor</span><strong>Mariusz Bak</strong><a href="mailto:dev@mariuszbak.eu">dev@mariuszbak.eu</a></div>
+<button id="reset" class="action">Resetuj MAX PEAK i MAX RMS</button><div class="release-info">Wersja <span id="buildVersion">26.10.4</span></div><div class="author-info"><span>Autor</span><strong>Mariusz Bak</strong><a href="mailto:dev@mariuszbak.eu">dev@mariuszbak.eu</a></div>
 </div></dialog>
-<script type="module" src="app.js?v=26.10.3"></script><script type="module" src="pwa.js?v=26.10.3"></script></body></html>
+<script type="module" src="app.js?v=26.10.4"></script><script type="module" src="pwa.js?v=26.10.4"></script></body></html>

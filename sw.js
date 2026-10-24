@@ -1,9 +1,9 @@
 const CACHE_PREFIX = 'spectrum-pwa-';
-const CACHE_NAME = CACHE_PREFIX + '26.10.3';
+const CACHE_NAME = CACHE_PREFIX + '26.10.4';
 const ROOT = new URL('./', self.location.href);
 const CORE = [
-  './index.html', './style.css?v=26.10.3', './app.js?v=26.10.3',
-  './peak-tracker.mjs?v=26.10.3', './waterfall.mjs?v=26.10.3', './processor.js', './pwa.js?v=26.10.3',
+  './index.html', './style.css?v=26.10.4', './app.js?v=26.10.4',
+  './peak-tracker.mjs?v=26.10.4', './waterfall.mjs?v=26.10.4', './processor.js', './pwa.js?v=26.10.4',
   './version.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png',
   './icons/maskable-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png'
 ].map(path => new URL(path, ROOT).href);

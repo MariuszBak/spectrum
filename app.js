@@ -1,11 +1,12 @@
-import { PeakTracker } from './peak-tracker.mjs?v=26.10.3';
-import { WaterfallBuffer } from './waterfall.mjs?v=26.10.3';
+import { PeakTracker } from './peak-tracker.mjs?v=26.10.4';
+import { WaterfallBuffer } from './waterfall.mjs?v=26.10.4';
 
 const $ = id => document.getElementById(id);
 const FFT_SIZE = 16384;
 const peakTracker = new PeakTracker();
 const waterfallBuffer = new WaterfallBuffer();
 let waterfallBitmap, waterfallBitmapRevision=-1, waterfallBitmapFloor;
+let frequencyProbe = null;
 const peakColors = ['#ffd18b', '#83d9ff', '#eeb1f7'];
 const numberFormat = new Intl.NumberFormat('pl-PL');
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -57,6 +58,7 @@ function unitUI() {
   $('meterTypeLabel').textContent = mode === 'analog' ? 'WSKAZÓWKA' : 'BARGRAF';
 }
 function spectrumUI() {
+  clearFrequencyProbe(false);
   $('peakCount').value = peakCount;
   $('peakCards').style.setProperty('--peak-count',peakCount);
   $('peakCards').setAttribute('aria-label',`Dominujące częstotliwości: ${peakCount}`);
@@ -100,6 +102,7 @@ function stateUI() {
   renderPeaks();
 }
 function setView(next) {
+  clearFrequencyProbe(false);
   if(next!==view){peakTracker.reset();lastPeakUpdate=-Infinity;if(next==='waterfall')waterfallBuffer.reset();}
   view = next;
   $('spectrumView').hidden=view==='level';$('levelView').hidden=view!=='level';
@@ -189,9 +192,41 @@ function drawPeakMarkers(c, x, y, top, bottom, left, right) {
     c.fillStyle = '#101623'; c.font = 'bold 11px ui-monospace, monospace'; c.textAlign = 'center'; c.fillText(String(i + 1), bx, by + 4); c.restore();
   });
 }
+function plotBounds(id,w,h){return {left:34,right:w-12,top:id==='spectrum'?14:8,bottom:h-(id==='spectrum'?27:8)};}
+function selectedFrequency(){
+  const max=Math.min(frequencyTo,sampleRate/2),min=Math.min(frequencyFrom,max-10);
+  return min*(max/min)**frequencyProbe.ratio;
+}
+function clearFrequencyProbe(redraw=true){
+  frequencyProbe=null;$('frequencyProbe').hidden=true;if(redraw)draw();
+}
+function updateFrequencyProbe(id,event){
+  const rect=$(id).getBoundingClientRect(),bounds=plotBounds(id,rect.width,rect.height);
+  if(bounds.right<=bounds.left||bounds.bottom<=bounds.top)return;
+  frequencyProbe={canvas:id,pointerId:event.pointerId,ratio:clamp((event.clientX-rect.left-bounds.left)/(bounds.right-bounds.left),0,1),heightRatio:clamp((event.clientY-rect.top-bounds.top)/(bounds.bottom-bounds.top),0,1)};
+  event.preventDefault();draw();
+}
+function drawFrequencyProbe(c,id,left,right,top,bottom){
+  if(!frequencyProbe)return;
+  const xx=left+frequencyProbe.ratio*(right-left);
+  c.save();c.strokeStyle='#f3f6fc';c.lineWidth=1.5;c.setLineDash([5,3]);
+  c.beginPath();c.moveTo(xx,top);c.lineTo(xx,bottom);c.stroke();c.setLineDash([]);
+  if(frequencyProbe.canvas===id){const yy=top+frequencyProbe.heightRatio*(bottom-top);c.fillStyle='#f3f6fc';c.beginPath();c.arc(xx,yy,4,0,2*Math.PI);c.fill();}
+  c.restore();
+}
+function showFrequencyProbe(){
+  if(!frequencyProbe||view==='level'){$('frequencyProbe').hidden=true;return;}
+  const rect=$(frequencyProbe.canvas).getBoundingClientRect(),root=$('workspace').getBoundingClientRect(),bounds=plotBounds(frequencyProbe.canvas,rect.width,rect.height);
+  const xx=rect.left-root.left+bounds.left+frequencyProbe.ratio*(bounds.right-bounds.left);
+  const yy=rect.top-root.top+bounds.top+frequencyProbe.heightRatio*(bounds.bottom-bounds.top);
+  const popup=$('frequencyProbe');$('probeFrequency').textContent=numberFormat.format(Math.round(selectedFrequency()));
+  popup.style.left=clamp(xx-66,6,Math.max(6,root.width-138))+'px';
+  popup.style.top=clamp(yy>=64?yy-62:yy+30,6,Math.max(6,root.height-44))+'px';
+  popup.hidden=false;
+}
 function drawSpectrum() {
   const s = surface('spectrum'); if (!s) return;
-  const [c, w, h] = s, left = 34, right = w - 12, top = 14, bottom = h - 27;
+  const [c, w, h] = s;const {left,right,top,bottom}=plotBounds('spectrum',w,h);
   if (right <= left || bottom <= top) return;
   const xmax = Math.min(frequencyTo, sampleRate / 2), xmin = Math.min(frequencyFrom, xmax - 10);
   const x = f => left + Math.log(f / xmin) / Math.log(xmax / xmin) * (right - left);
@@ -213,7 +248,7 @@ function drawSpectrum() {
     c.textAlign = f === xmin ? 'left' : f === xmax ? 'right' : 'center'; c.fillStyle = '#91a1b7';
     c.fillText(f >= 1000 ? String(Math.round(f / 100) / 10) + 'k' : String(Math.round(f)), xx, h - 9); previousLabel = xx;
   }
-  if (!frequencyData) return;
+  if (!frequencyData) {drawFrequencyProbe(c,'spectrum',left,right,top,bottom);return;}
   const binHz = sampleRate / FFT_SIZE, bins = frequencyData.length, cols = Math.floor(right - left), points = [];
   for (let i = 0; i < cols; i++) {
     const low = xmin * (xmax / xmin) ** (i / cols), high = xmin * (xmax / xmin) ** ((i + 1) / cols);
@@ -225,9 +260,10 @@ function drawSpectrum() {
   c.beginPath(); c.moveTo(left, bottom); for (const p of points) c.lineTo(...p); c.lineTo(right, bottom); c.closePath(); c.fillStyle = fill; c.fill();
   c.beginPath(); points.forEach((p, i) => i ? c.lineTo(...p) : c.moveTo(...p)); c.strokeStyle = '#99d8ed'; c.lineWidth = 1.5; c.stroke();
   if(view!=='waterfall')drawPeakMarkers(c, x, y, top, bottom, left, right);
+  drawFrequencyProbe(c,'spectrum',left,right,top,bottom);
 }
 function drawWaterfall(){
-  const s=surface('waterfall');if(!s)return;const[c,w,h]=s,left=34,right=w-12,top=8,bottom=h-8;
+  const s=surface('waterfall');if(!s)return;const[c,w,h]=s;const{left,right,top,bottom}=plotBounds('waterfall',w,h);
   if(right<=left||bottom<=top)return;
   if(!waterfallBitmap)waterfallBitmap=document.createElement('canvas');
   if(waterfallBitmapRevision!==waterfallBuffer.revision||waterfallBitmapFloor!==spectrumFloor){
@@ -243,8 +279,9 @@ function drawWaterfall(){
     const index=rows.findIndex(row=>rows[0].time-row.time>=elapsed),yy=top+index/waterfallBuffer.maxRows*(bottom-top);
     if(index>=0&&yy-previous>15){c.fillText('−'+elapsed/1000,left-7,yy+3);previous=yy;}
   }
+  drawFrequencyProbe(c,'waterfall',left,right,top,bottom);
 }
-function draw() { if (view === 'level') drawMeter(); else {drawSpectrum();if(view==='waterfall')drawWaterfall();} }
+function draw() { if (view === 'level') drawMeter(); else {drawSpectrum();if(view==='waterfall')drawWaterfall();} showFrequencyProbe(); }
 function loop(t) {
   if (state !== 'running') return;
   if (t - lastFrame >= 33) {
@@ -315,6 +352,18 @@ function calibrate(kind) {
   else { if (value < 0 || value > 160) { target.textContent = 'Korekta musi mieścić się w zakresie 0–160 dB.'; return; } offset = value; $('offset').value = offset.toFixed(1); }
   save(); unitUI(); target.textContent = `Kalibracja zapisana · korekta ${value.toFixed(1)} dB`; readings(); draw();
 }
+for(const id of ['spectrum','waterfall']){
+  const canvas=$(id);
+  canvas.addEventListener('pointerdown',event=>{
+    if(event.isPrimary===false||event.button>0||(frequencyProbe&&frequencyProbe.pointerId!==event.pointerId))return;
+    try{canvas.setPointerCapture(event.pointerId);}catch{}
+    updateFrequencyProbe(id,event);
+  },{passive:false});
+  canvas.addEventListener('pointermove',event=>{if(frequencyProbe?.pointerId===event.pointerId&&frequencyProbe.canvas===id)updateFrequencyProbe(id,event);},{passive:false});
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,event=>{if(frequencyProbe?.pointerId===event.pointerId&&frequencyProbe.canvas===id)clearFrequencyProbe();});
+  canvas.addEventListener('contextmenu',event=>event.preventDefault());
+}
+window.addEventListener('blur',()=>clearFrequencyProbe());
 $('start').addEventListener('click', start);
 $('spectrumTab').onclick = () => setView('spectrum');
 $('levelTab').onclick = () => setView('level');
@@ -325,7 +374,7 @@ for(const name of ['spectrum','waterfall','level'])$(name+'Tab').onkeydown=e=>{
     const next=e.key==='Home'?'spectrum':e.key==='End'?'level':names[(index+(e.key==='ArrowLeft'?2:1))%3];setView(next);$(next+'Tab').focus();
   }
 };
-$('settingsOpen').onclick = () => $('settings').showModal();
+$('settingsOpen').onclick = () => {clearFrequencyProbe();$('settings').showModal();};
 $('settingsClose').onclick = () => $('settings').close();
 $('settings').addEventListener('click', e => { if (e.target === $('settings')) { const r = $('settings').getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('settings').close(); } });
 $('units').onchange = () => { unit = $('units').value; save(); unitUI(); readings(); draw(); };
