@@ -23,7 +23,7 @@ updateInstallUI();
 if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register('./sw.js?v=26.10.4', { scope: './', updateViaCache: 'none' });
+      const registration = await navigator.serviceWorker.register('./sw.js?v=26.10.5', { scope: './', updateViaCache: 'none' });
       await navigator.serviceWorker.ready;
       offlineStatus.textContent = 'Gotowa do pracy offline.';
       if (registration.waiting) offlineStatus.textContent = 'Aktualizacja gotowa. Zamknij i otwórz aplikację.';

@@ -1,4 +1,4 @@
-KOMPILACJA 26.10.4
+KOMPILACJA 26.10.5
 
 SPECTRUM — PWA
 
@@ -29,6 +29,8 @@ FUNKCJE
 Spectrum: FFT 16384, wybór 1/2/3 pików, kolory i podejrzenie wzbudzenia.
 Waterfall: bieżące widmo u góry i historia poniżej, bez detekcji pików.
 Poziom: RMS, chwilowy PEAK, MAX PEAK, MAX RMS.
+Barwy: kafelki pasm rozświetlane aktywnością dźwięku, z opisem częstotliwości i barwy.
+Opisy UUU/AAA itp. są skojarzeniami; aplikacja nie rozpoznaje wypowiadanych głosek.
 Ustawienia: wskazówka/bargraf, dBFS/dB SPL/dBm, kalibracja.
 Analizator: dolny poziom skali od -120 do -40 dBFS, zakres od–do w Hz.
 Zakres częstotliwości dotyczy wykresu, Waterfall i wykrywania pików.

@@ -1,10 +1,12 @@
-import { PeakTracker } from './peak-tracker.mjs?v=26.10.4';
-import { WaterfallBuffer } from './waterfall.mjs?v=26.10.4';
+import { PeakTracker } from './peak-tracker.mjs?v=26.10.5';
+import { VOICE_BANDS, BandActivity } from './band-activity.mjs?v=26.10.5';
+import { WaterfallBuffer } from './waterfall.mjs?v=26.10.5';
 
 const $ = id => document.getElementById(id);
 const FFT_SIZE = 16384;
 const peakTracker = new PeakTracker();
 const waterfallBuffer = new WaterfallBuffer();
+const bandActivity = new BandActivity();
 let waterfallBitmap, waterfallBitmapRevision=-1, waterfallBitmapFloor;
 let frequencyProbe = null;
 const peakColors = ['#ffd18b', '#83d9ff', '#eeb1f7'];
@@ -21,7 +23,7 @@ let mode = 'analog', view = 'spectrum', unit = 'dbfs', offset = 100, dbmOffset =
 try {
   const saved = JSON.parse(localStorage.getItem('spectrum-settings') || '{}');
   mode = saved.mode === 'bar' ? 'bar' : 'analog';
-  view = ['spectrum','waterfall','level'].includes(saved.view) ? saved.view : 'spectrum';
+  view = ['spectrum','waterfall','level','bands'].includes(saved.view) ? saved.view : 'spectrum';
   unit = ['dbfs', 'spl', 'dbm'].includes(saved.unit) ? saved.unit : saved.calibrated ? 'spl' : 'dbfs';
   offset = Number.isFinite(saved.offset) ? saved.offset : 100;
   dbmOffset = Number.isFinite(saved.dbmOffset) ? saved.dbmOffset : null;
@@ -70,6 +72,8 @@ function spectrumUI() {
   $('spectrum').setAttribute('aria-label', `Widmo od ${frequencyFrom} do ${frequencyTo} Hz · liczba pików: ${peakCount}`);
   peakTracker.configure({ floor: spectrumFloor, minFrequency: frequencyFrom, maxFrequency: frequencyTo, maxPeaks: peakCount });
   waterfallBuffer.configure(frequencyFrom, frequencyTo);
+  bandActivity.configure({floor:spectrumFloor,minFrequency:frequencyFrom,maxFrequency:frequencyTo});
+  renderBands();
   $('waterfallScale').textContent = `${spectrumFloor}…0 dBFS`;
   if (analyser) analyser.minDecibels = spectrumFloor;
   renderPeaks();
@@ -103,14 +107,14 @@ function stateUI() {
 }
 function setView(next) {
   clearFrequencyProbe(false);
-  if(next!==view){peakTracker.reset();lastPeakUpdate=-Infinity;if(next==='waterfall')waterfallBuffer.reset();}
+  if(next!==view){peakTracker.reset();lastPeakUpdate=-Infinity;if(next==='waterfall')waterfallBuffer.reset();if(next==='bands')bandActivity.reset();}
   view = next;
-  $('spectrumView').hidden=view==='level';$('levelView').hidden=view!=='level';
+  $('spectrumView').hidden=view!=='spectrum'&&view!=='waterfall';$('levelView').hidden=view!=='level';$('bandsView').hidden=view!=='bands';
   $('spectrumView').classList.toggle('waterfall-mode',view==='waterfall');
   $('spectrumView').setAttribute('aria-labelledby',view==='waterfall'?'waterfallTab':'spectrumTab');
   $('spectrumTitle').textContent=view==='waterfall'?'Widmo + Waterfall':'Widmo';
   $('waterfallBox').hidden=view!=='waterfall';$('peakCards').hidden=view==='waterfall';$('peakStatus').hidden=view==='waterfall';
-  for(const name of ['spectrum','waterfall','level']){$(name+'Tab').setAttribute('aria-selected',String(name===view));$(name+'Tab').tabIndex=name===view?0:-1;}
+  for(const name of ['spectrum','waterfall','level','bands']){$(name+'Tab').setAttribute('aria-selected',String(name===view));$(name+'Tab').tabIndex=name===view?0:-1;}
   renderPeaks();save();draw();
 }
 function surface(id) {
@@ -123,6 +127,20 @@ function surface(id) {
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, rect.width, rect.height);
   return [c, rect.width, rect.height];
+}
+function renderBands(){
+  let active=0;
+  bandActivity.states.forEach((band,i)=>{
+    const card=$('bandCard'+i),lit=band.enabled&&band.value>=.16;
+    card.style.setProperty('--activity',band.value.toFixed(3));
+    card.classList.toggle('lit',lit);card.classList.toggle('out-of-band',!band.enabled);
+    const details=Number.isFinite(band.level)?`${Math.round(band.level)} dBFS`:band.enabled?'Brak aktywności':'Poza wybranym pasmem';
+    card.title=`${VOICE_BANDS[i].label} · ${VOICE_BANDS[i].description} · ${details}`;
+    if(lit)active++;
+  });
+  $('bandsStatus').textContent=`${active} ${active===1?'pasmo':active>=2&&active<=4?'pasma':'pasm'}`;
+  const format=f=>f>=1000?`${Math.round(f/100)/10} kHz`:`${f} Hz`;
+  $('bandsRange').textContent=`${format(frequencyFrom)}–${format(frequencyTo)}`;
 }
 function drawMeter() {
   const s = surface('meter'); if (!s) return;
@@ -215,7 +233,7 @@ function drawFrequencyProbe(c,id,left,right,top,bottom){
   c.restore();
 }
 function showFrequencyProbe(){
-  if(!frequencyProbe||view==='level'){$('frequencyProbe').hidden=true;return;}
+  if(!frequencyProbe||(view!=='spectrum'&&view!=='waterfall')){$('frequencyProbe').hidden=true;return;}
   const rect=$(frequencyProbe.canvas).getBoundingClientRect(),root=$('workspace').getBoundingClientRect(),bounds=plotBounds(frequencyProbe.canvas,rect.width,rect.height);
   const xx=rect.left-root.left+bounds.left+frequencyProbe.ratio*(bounds.right-bounds.left);
   const yy=rect.top-root.top+bounds.top+frequencyProbe.heightRatio*(bounds.bottom-bounds.top);
@@ -281,12 +299,12 @@ function drawWaterfall(){
   }
   drawFrequencyProbe(c,'waterfall',left,right,top,bottom);
 }
-function draw() { if (view === 'level') drawMeter(); else {drawSpectrum();if(view==='waterfall')drawWaterfall();} showFrequencyProbe(); }
+function draw() { if (view === 'level') drawMeter(); else if(view==='bands')renderBands(); else {drawSpectrum();if(view==='waterfall')drawWaterfall();} showFrequencyProbe(); }
 function loop(t) {
   if (state !== 'running') return;
   if (t - lastFrame >= 33) {
     lastFrame = t; analyser.getFloatFrequencyData(frequencyData);
-    if (t - lastPeakUpdate >= 100) { if(view==='spectrum'){peakTracker.update(frequencyData, sampleRate / FFT_SIZE, t);renderPeaks();}else if(view==='waterfall')waterfallBuffer.push(frequencyData,sampleRate/FFT_SIZE,t);lastPeakUpdate=t; }
+    if (t - lastPeakUpdate >= 100) { if(view==='spectrum'){peakTracker.update(frequencyData, sampleRate / FFT_SIZE, t);renderPeaks();}else if(view==='waterfall')waterfallBuffer.push(frequencyData,sampleRate/FFT_SIZE,t);else if(view==='bands')bandActivity.update(frequencyData,sampleRate/FFT_SIZE,t);lastPeakUpdate=t; }
     needle += (Math.max(-90, rmsDb) - needle) * .24;
     draw();
   }
@@ -322,7 +340,7 @@ async function start() {
     analyser = localContext.createAnalyser(); analyser.fftSize = FFT_SIZE;
     analyser.smoothingTimeConstant = Number($('smooth').value); analyser.minDecibels = spectrumFloor; analyser.maxDecibels = 0;
     frequencyData = new Float32Array(analyser.frequencyBinCount).fill(-Infinity);
-    peakTracker.reset(); waterfallBuffer.reset(); rmsDb = peakDb = -Infinity; needle = -90;
+    peakTracker.reset(); waterfallBuffer.reset(); bandActivity.reset(); rmsDb = peakDb = -Infinity; needle = -90;
     processor = new AudioWorkletNode(localContext, 'meter-processor');
     processor.port.onmessage = ({ data }) => {
       if (state !== 'running') return;
@@ -368,10 +386,11 @@ $('start').addEventListener('click', start);
 $('spectrumTab').onclick = () => setView('spectrum');
 $('levelTab').onclick = () => setView('level');
 $('waterfallTab').onclick = () => setView('waterfall');
-for(const name of ['spectrum','waterfall','level'])$(name+'Tab').onkeydown=e=>{
+$('bandsTab').onclick = () => setView('bands');
+for(const name of ['spectrum','waterfall','level','bands'])$(name+'Tab').onkeydown=e=>{
   if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
-    e.preventDefault();const names=['spectrum','waterfall','level'],index=names.indexOf(view);
-    const next=e.key==='Home'?'spectrum':e.key==='End'?'level':names[(index+(e.key==='ArrowLeft'?2:1))%3];setView(next);$(next+'Tab').focus();
+    e.preventDefault();const names=['spectrum','waterfall','level','bands'],index=names.indexOf(view);
+    const next=e.key==='Home'?'spectrum':e.key==='End'?'level':names[(index+(e.key==='ArrowLeft'?3:1))%4];setView(next);$(next+'Tab').focus();
   }
 };
 $('settingsOpen').onclick = () => {clearFrequencyProbe();$('settings').showModal();};
