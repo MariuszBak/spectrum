@@ -1,4 +1,4 @@
-KOMPILACJA 26.10.5
+KOMPILACJA 26.10.7
 
 SPECTRUM — PWA
 
@@ -28,6 +28,10 @@ i wersje zasobów w odnośnikach. W repozytorium robi to scripts/version.mjs.
 FUNKCJE
 Spectrum: FFT 16384, wybór 1/2/3 pików, kolory i podejrzenie wzbudzenia.
 Waterfall: bieżące widmo u góry i historia poniżej, bez detekcji pików.
+Zoom 1–16× zmienia zakres poziomów w dB, a Offset przesuwa górną granicę skali
+od 0 do -120 dBFS. Nie zmieniają pasma częstotliwości.
+Czułość -24…+24 dB zmienia jasność kolorów, bez zmiany mikrofonu i odczytów.
+Zmiana tych suwaków zachowuje historię. Reset przywraca widok 1× / 0 dB / 0 dB.
 Poziom: RMS, chwilowy PEAK, MAX PEAK, MAX RMS.
 Barwy: kafelki pasm rozświetlane aktywnością dźwięku, z opisem częstotliwości i barwy.
 Opisy UUU/AAA itp. są skojarzeniami; aplikacja nie rozpoznaje wypowiadanych głosek.

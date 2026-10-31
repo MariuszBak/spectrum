@@ -1,6 +1,6 @@
-import { PeakTracker } from './peak-tracker.mjs?v=26.10.5';
-import { VOICE_BANDS, BandActivity } from './band-activity.mjs?v=26.10.5';
-import { WaterfallBuffer } from './waterfall.mjs?v=26.10.5';
+import { PeakTracker } from './peak-tracker.mjs?v=26.10.7';
+import { VOICE_BANDS, BandActivity } from './band-activity.mjs?v=26.10.7';
+import { WaterfallBuffer, waterfallLevelRange } from './waterfall.mjs?v=26.10.7';
 
 const $ = id => document.getElementById(id);
 const FFT_SIZE = 16384;
@@ -9,6 +9,8 @@ const waterfallBuffer = new WaterfallBuffer();
 const bandActivity = new BandActivity();
 let waterfallBitmap, waterfallBitmapRevision=-1, waterfallBitmapFloor;
 let frequencyProbe = null;
+let waterfallZoom=1,waterfallOffset=0,waterfallGain=0;
+let waterfallBitmapGain,waterfallBitmapZoom,waterfallBitmapOffset;
 const peakColors = ['#ffd18b', '#83d9ff', '#eeb1f7'];
 const numberFormat = new Intl.NumberFormat('pl-PL');
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -28,6 +30,9 @@ try {
   offset = Number.isFinite(saved.offset) ? saved.offset : 100;
   dbmOffset = Number.isFinite(saved.dbmOffset) ? saved.dbmOffset : null;
   feedbackEnabled = saved.feedbackEnabled !== false;
+  waterfallZoom=Number.isFinite(saved.waterfallLevelZoom)?clamp(saved.waterfallLevelZoom,1,16):1;
+  waterfallOffset=Number.isFinite(saved.waterfallLevelOffset)?clamp(saved.waterfallLevelOffset,-120,0):0;
+  waterfallGain=Number.isFinite(saved.waterfallGain)?clamp(saved.waterfallGain,-24,24):0;
   peakCount = [1,2,3].includes(saved.peakCount) ? saved.peakCount : 3;
   spectrumFloor = Number.isFinite(saved.spectrumFloor) ? clamp(Math.round(saved.spectrumFloor / 5) * 5, -120, -40) : -100;
   if (Number.isFinite(saved.frequencyFrom) && Number.isFinite(saved.frequencyTo) && saved.frequencyFrom >= 20 && saved.frequencyTo <= 20000 && saved.frequencyTo - saved.frequencyFrom >= 10) { frequencyFrom = saved.frequencyFrom; frequencyTo = saved.frequencyTo; }
@@ -43,7 +48,7 @@ const shown = x => Number.isFinite(x) && correction() !== null ? (x + correction
 const tick = x => correction() === null ? '—' : String(Math.round((x + correction()) * 10) / 10);
 const unitName = () => unit === 'spl' ? 'dB SPL · est.' : unit === 'dbm' ? (dbmOffset === null ? 'dBm · skalibruj' : 'dBm · kal.') : 'dBFS';
 function save() {
-  try { localStorage.setItem('spectrum-settings', JSON.stringify({ mode, view, unit, offset, dbmOffset, feedbackEnabled, peakCount, spectrumFloor, frequencyFrom, frequencyTo, smooth: Number($('smooth').value) })); } catch {}
+  try { localStorage.setItem('spectrum-settings', JSON.stringify({ mode, view, unit, offset, dbmOffset, feedbackEnabled, waterfallLevelZoom:waterfallZoom, waterfallLevelOffset:waterfallOffset, waterfallGain, peakCount, spectrumFloor, frequencyFrom, frequencyTo, smooth: Number($('smooth').value) })); } catch {}
 }
 function readings() {
   $('level').textContent = shown(rmsDb);
@@ -75,6 +80,7 @@ function spectrumUI() {
   bandActivity.configure({floor:spectrumFloor,minFrequency:frequencyFrom,maxFrequency:frequencyTo});
   renderBands();
   $('waterfallScale').textContent = `${spectrumFloor}…0 dBFS`;
+  waterfallUI();
   if (analyser) analyser.minDecibels = spectrumFloor;
   renderPeaks();
 }
@@ -113,7 +119,7 @@ function setView(next) {
   $('spectrumView').classList.toggle('waterfall-mode',view==='waterfall');
   $('spectrumView').setAttribute('aria-labelledby',view==='waterfall'?'waterfallTab':'spectrumTab');
   $('spectrumTitle').textContent=view==='waterfall'?'Widmo + Waterfall':'Widmo';
-  $('waterfallBox').hidden=view!=='waterfall';$('peakCards').hidden=view==='waterfall';$('peakStatus').hidden=view==='waterfall';
+  $('waterfallControls').hidden=view!=='waterfall';waterfallUI();$('waterfallBox').hidden=view!=='waterfall';$('peakCards').hidden=view==='waterfall';$('peakStatus').hidden=view==='waterfall';
   for(const name of ['spectrum','waterfall','level','bands']){$(name+'Tab').setAttribute('aria-selected',String(name===view));$(name+'Tab').tabIndex=name===view?0:-1;}
   renderPeaks();save();draw();
 }
@@ -210,11 +216,23 @@ function drawPeakMarkers(c, x, y, top, bottom, left, right) {
     c.fillStyle = '#101623'; c.font = 'bold 11px ui-monospace, monospace'; c.textAlign = 'center'; c.fillText(String(i + 1), bx, by + 4); c.restore();
   });
 }
-function plotBounds(id,w,h){return {left:34,right:w-12,top:id==='spectrum'?14:8,bottom:h-(id==='spectrum'?27:8)};}
-function selectedFrequency(){
-  const max=Math.min(frequencyTo,sampleRate/2),min=Math.min(frequencyFrom,max-10);
-  return min*(max/min)**frequencyProbe.ratio;
+function plotBounds(id,w,h){return {left:view==='waterfall'?44:34,right:w-12,top:id==='spectrum'?14:8,bottom:h-(id==='spectrum'?27:8)};}
+function baseFrequencyRange(){const maxFrequency=Math.min(frequencyTo,sampleRate/2);return {minFrequency:Math.min(frequencyFrom,maxFrequency-10),maxFrequency};}
+function visibleFrequencyRange(){return baseFrequencyRange();}
+function visibleLevelRange(){return view==='waterfall'?waterfallLevelRange(spectrumFloor,waterfallZoom,waterfallOffset):{minLevel:spectrumFloor,maxLevel:0,span:-spectrumFloor};}
+function waterfallUI(){
+  $('waterfallZoom').value=Math.log2(waterfallZoom);$('waterfallOffset').value=waterfallOffset;$('waterfallGain').value=waterfallGain;
+  $('waterfallZoomValue').textContent=numberFormat.format(Math.round(waterfallZoom*10)/10)+'×';
+  $('waterfallOffsetValue').textContent=waterfallOffset+' dB';
+  $('waterfallGainValue').textContent=(waterfallGain>0?'+':'')+waterfallGain+' dB';
+  $('waterfallOffset').disabled=false;
+  const range=waterfallLevelRange(spectrumFloor,waterfallZoom,waterfallOffset),format=d=>String(Math.round(d*10)/10);
+  $('waterfallScale').textContent=`${format(range.minLevel-waterfallGain)}…${format(range.maxLevel-waterfallGain)} dBFS`;
+  $('waterfallZoomRange').textContent=`${format(range.minLevel)}…${format(range.maxLevel)} dBFS`;
+
 }
+function selectedFrequency(){const range=visibleFrequencyRange();return range.minFrequency*(range.maxFrequency/range.minFrequency)**frequencyProbe.ratio;}
+
 function clearFrequencyProbe(redraw=true){
   frequencyProbe=null;$('frequencyProbe').hidden=true;if(redraw)draw();
 }
@@ -246,13 +264,18 @@ function drawSpectrum() {
   const s = surface('spectrum'); if (!s) return;
   const [c, w, h] = s;const {left,right,top,bottom}=plotBounds('spectrum',w,h);
   if (right <= left || bottom <= top) return;
-  const xmax = Math.min(frequencyTo, sampleRate / 2), xmin = Math.min(frequencyFrom, xmax - 10);
+  const range=visibleFrequencyRange(),xmax=range.maxFrequency,xmin=range.minFrequency;
   const x = f => left + Math.log(f / xmin) / Math.log(xmax / xmin) * (right - left);
-  const y = d => top + clamp(d, spectrumFloor, 0) / spectrumFloor * (bottom - top);
+  const levels=visibleLevelRange();
+  const y = d => top+(levels.maxLevel-clamp(d,levels.minLevel,levels.maxLevel))/levels.span*(bottom-top);
   c.font = '10px ui-monospace, monospace'; c.lineWidth = 1;
-  for (let d = 0; d >= spectrumFloor; d -= h < 160 ? 40 : 20) {
-    c.strokeStyle = '#263449'; c.beginPath(); c.moveTo(left, y(d)); c.lineTo(right, y(d)); c.stroke();
-    c.fillStyle = '#8498b2'; c.textAlign = 'right'; c.fillText(d, left - 7, y(d) + 3);
+  const ideal=levels.span/Math.max(2,Math.min(6,Math.floor((bottom-top)/30))),power=10**Math.floor(Math.log10(ideal));
+  const step=([1,2,5,10].find(value=>value*power>=ideal)||10)*power;
+  const levelTicks=[levels.maxLevel,levels.minLevel];
+  for(let d=Math.ceil(levels.minLevel/step)*step;d<levels.maxLevel;d+=step)if(y(d)-top>12&&bottom-y(d)>12)levelTicks.push(d);
+  for(const d of levelTicks){
+    c.strokeStyle='#263449';c.beginPath();c.moveTo(left,y(d));c.lineTo(right,y(d));c.stroke();
+    c.fillStyle='#8498b2';c.textAlign='right';c.fillText(String(Math.round(d*10)/10),left-7,y(d)+3);
   }
   const ticks = [xmin, xmax];
   for (let decade = 1; decade <= 10000; decade *= 10) for (const factor of [1, 2, 5]) {
@@ -271,7 +294,7 @@ function drawSpectrum() {
   for (let i = 0; i < cols; i++) {
     const low = xmin * (xmax / xmin) ** (i / cols), high = xmin * (xmax / xmin) ** ((i + 1) / cols);
     const a = clamp(Math.floor(low / binHz), 1, bins - 1), b = clamp(Math.ceil(high / binHz), a + 1, bins);
-    let value = spectrumFloor; for (let k = a; k < b; k++) value = Math.max(value, frequencyData[k]);
+    let value = -Infinity; for (let k = a; k < b; k++) value = Math.max(value, frequencyData[k]);
     points.push([left + i, y(value)]);
   }
   const fill = c.createLinearGradient(0, top, 0, bottom); fill.addColorStop(0, '#83d9ff45'); fill.addColorStop(1, '#83d9ff02');
@@ -284,10 +307,10 @@ function drawWaterfall(){
   const s=surface('waterfall');if(!s)return;const[c,w,h]=s;const{left,right,top,bottom}=plotBounds('waterfall',w,h);
   if(right<=left||bottom<=top)return;
   if(!waterfallBitmap)waterfallBitmap=document.createElement('canvas');
-  if(waterfallBitmapRevision!==waterfallBuffer.revision||waterfallBitmapFloor!==spectrumFloor){
-    const bitmap=waterfallBuffer.render(spectrumFloor);waterfallBitmap.width=bitmap.width;waterfallBitmap.height=bitmap.height;
+  if(waterfallBitmapRevision!==waterfallBuffer.revision||waterfallBitmapFloor!==spectrumFloor||waterfallBitmapGain!==waterfallGain||waterfallBitmapZoom!==waterfallZoom||waterfallBitmapOffset!==waterfallOffset){
+    const bitmap=waterfallBuffer.render(spectrumFloor,waterfallGain,waterfallZoom,waterfallOffset);waterfallBitmap.width=bitmap.width;waterfallBitmap.height=bitmap.height;
     const off=waterfallBitmap.getContext('2d'),image=off.createImageData(bitmap.width,bitmap.height);image.data.set(bitmap.pixels);off.putImageData(image,0,0);
-    waterfallBitmapRevision=waterfallBuffer.revision;waterfallBitmapFloor=spectrumFloor;
+    waterfallBitmapRevision=waterfallBuffer.revision;waterfallBitmapFloor=spectrumFloor;waterfallBitmapGain=waterfallGain;waterfallBitmapZoom=waterfallZoom;waterfallBitmapOffset=waterfallOffset;
   }
   c.imageSmoothingEnabled=false;c.drawImage(waterfallBitmap,left,top,right-left,bottom-top);
   c.font='9px ui-monospace,monospace';c.fillStyle='#91a1b7';c.textAlign='right';c.fillText('0 s',left-7,top+8);
@@ -352,6 +375,7 @@ async function start() {
     state = 'running'; lastFrame = lastPeakUpdate = -Infinity;
     localContext.onstatechange = () => { if (state === 'running' && localContext.state !== 'running') stopCapture('Audio przerwane. Naciśnij Start.'); };
     $('sampleRate').textContent = `${sampleRate / 1000} kHz · MONO`;
+    waterfallUI();
     readings(); raf = requestAnimationFrame(loop);
   } catch (e) {
     if (request === sessionId) {
@@ -382,6 +406,11 @@ for(const id of ['spectrum','waterfall']){
   canvas.addEventListener('contextmenu',event=>event.preventDefault());
 }
 window.addEventListener('blur',()=>clearFrequencyProbe());
+function updateWaterfallControls(){clearFrequencyProbe(false);waterfallUI();save();draw();}
+$('waterfallZoom').oninput=()=>{waterfallZoom=2**clamp(Number($('waterfallZoom').value)||0,0,4);updateWaterfallControls();};
+$('waterfallOffset').oninput=()=>{waterfallOffset=clamp(Number($('waterfallOffset').value)||0,-120,0);updateWaterfallControls();};
+$('waterfallGain').oninput=()=>{waterfallGain=clamp(Number($('waterfallGain').value)||0,-24,24);updateWaterfallControls();};
+$('waterfallReset').onclick=()=>{waterfallZoom=1;waterfallOffset=0;waterfallGain=0;updateWaterfallControls();};
 $('start').addEventListener('click', start);
 $('spectrumTab').onclick = () => setView('spectrum');
 $('levelTab').onclick = () => setView('level');
