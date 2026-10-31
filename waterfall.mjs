@@ -6,8 +6,15 @@ const COLORS = Array.from({length:256},(_,i)=>{
   return [1,2,3].map(k=>Math.round(a[k]+(b[k]-a[k])*ratio));
 });
 
+export function waterfallLevelRange(floor=-100,zoom=1,offset=0){
+  const factor=Math.max(1,Math.min(16,Number(zoom)||1));
+  const span=Math.max(40,Math.min(120,-Number(floor)||100))/factor;
+  const maxLevel=Math.max(-120,Math.min(0,Number(offset)||0));
+  return {minLevel:maxLevel-span,maxLevel,span};
+}
+
 export class WaterfallBuffer {
-  constructor(columns=384,maxRows=240){this.columns=columns;this.maxRows=maxRows;this.minFrequency=20;this.maxFrequency=20000;this.revision=0;this.reset();}
+  constructor(columns=1024,maxRows=240){this.columns=columns;this.maxRows=maxRows;this.minFrequency=20;this.maxFrequency=20000;this.revision=0;this.reset();}
   reset(){this.rows=[];this.segments=null;this.revision++;this.bitmap=null;}
   configure(minFrequency,maxFrequency){
     if(minFrequency!==this.minFrequency||maxFrequency!==this.maxFrequency){this.minFrequency=minFrequency;this.maxFrequency=maxFrequency;this.reset();}
@@ -31,12 +38,13 @@ export class WaterfallBuffer {
     this.rows.unshift({time,levels});if(this.rows.length>this.maxRows)this.rows.pop();
     this.revision++;
   }
-  render(floor){
-    const key=this.revision+':'+floor;if(this.bitmapKey===key&&this.bitmap)return this.bitmap;
+  render(floor,gain=0,zoom=1,offset=0){
+    const range=waterfallLevelRange(floor,zoom,offset);
+    const key=this.revision+':'+floor+':'+gain+':'+zoom+':'+offset;if(this.bitmapKey===key&&this.bitmap)return this.bitmap;
     const pixels=new Uint8ClampedArray(this.columns*this.maxRows*4);
     for(let row=0;row<this.maxRows;row++)for(let col=0;col<this.columns;col++){
       const level=this.rows[row]?.levels[col]??-Infinity;
-      const index=Math.max(0,Math.min(255,Math.round((level-floor)/-floor*255)));
+      const index=Math.max(0,Math.min(255,Math.round((level+gain-range.minLevel)/range.span*255)));
       const color=COLORS[index],offset=(row*this.columns+col)*4;
       pixels[offset]=color[0];pixels[offset+1]=color[1];pixels[offset+2]=color[2];pixels[offset+3]=255;
     }
